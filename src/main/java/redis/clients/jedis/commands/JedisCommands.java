@@ -291,4 +291,19 @@ public interface JedisCommands {
 
   List<GeoRadiusResponse> georadiusByMember(String key, String member, double radius, GeoUnit unit,
       GeoRadiusParam param);
+
+  /**
+   * Executes BITFIELD Redis command
+   * @param key
+   * @param arguments
+   */
+  List<Long> bitfield(String key, String...arguments);
+  
+  /**
+   * Used for HSTRLEN Redis command
+   * @param key 
+   * @param field
+   * @return lenth of the value for key
+   */
+  Long hstrlen(final String key, final String field);
 }

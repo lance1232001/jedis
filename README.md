@@ -6,7 +6,7 @@ Jedis is a blazingly small and sane [Redis](http://github.com/antirez/redis "Red
 
 Jedis was conceived to be EASY to use.
 
-Jedis is fully compatible with redis 2.8.x and 3.0.x.
+Jedis is fully compatible with redis 2.8.x and 3.x.x.
 
 ## Community
 
@@ -48,7 +48,7 @@ Or use it as a maven dependency:
 <dependency>
     <groupId>redis.clients</groupId>
     <artifactId>jedis</artifactId>
-    <version>2.7.2</version>
+    <version>2.9.0</version>
     <type>jar</type>
     <scope>compile</scope>
 </dependency>
@@ -65,6 +65,8 @@ String value = jedis.get("foo");
 For more usage examples check the tests.
 
 Please check the [wiki](http://github.com/xetorthio/jedis/wiki "wiki"). There are lots of cool things you should know, including information about connection pooling.
+
+Master branch javadocs can be found here: http://xetorthio.github.io/jedis/
 
 And you are done!
 
@@ -94,7 +96,7 @@ Please check the [WIKI](https://github.com/xetorthio/jedis/wiki) for more useful
 
 That is great!
 
-Please see CONTRIBUTING.md on project's root directory for follow up how to contribute to Jedis project.
+Please see [CONTRIBUTING.md](https://github.com/xetorthio/jedis/blob/master/.github/CONTRIBUTING.md) on project's root directory for follow up how to contribute to Jedis project.
 
 Thanks for helping!
 

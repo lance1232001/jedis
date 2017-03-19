@@ -1,5 +1,10 @@
 package redis.clients.jedis.tests;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -8,7 +13,6 @@ import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.PooledObjectFactory;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
-import org.junit.Assert;
 import org.junit.Test;
 
 import redis.clients.jedis.HostAndPort;
@@ -17,10 +21,10 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.Transaction;
 import redis.clients.jedis.exceptions.InvalidURIException;
-import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
+import redis.clients.jedis.exceptions.JedisExhaustedPoolException;
 
-public class JedisPoolTest extends Assert {
+public class JedisPoolTest {
   private static HostAndPort hnp = HostAndPortUtil.getRedisServers().get(0);
 
   @Test
@@ -92,7 +96,7 @@ public class JedisPoolTest extends Assert {
     assertTrue(pool.isClosed());
   }
 
-  @Test(expected = JedisConnectionException.class)
+  @Test(expected = JedisExhaustedPoolException.class)
   public void checkPoolOverflow() {
     GenericObjectPoolConfig config = new GenericObjectPoolConfig();
     config.setMaxTotal(1);
@@ -360,7 +364,8 @@ public class JedisPoolTest extends Assert {
   public void testCloseConnectionOnMakeObject() {
     JedisPoolConfig config = new JedisPoolConfig();
     config.setTestOnBorrow(true);
-    JedisPool pool = new JedisPool(new JedisPoolConfig(), hnp.getHost(), hnp.getPort(), 2000, "wrong pass");
+    JedisPool pool = new JedisPool(new JedisPoolConfig(), hnp.getHost(), hnp.getPort(), 2000,
+        "wrong pass");
     Jedis jedis = new Jedis("redis://:foobared@localhost:6379/");
     int currentClientCount = getClientCount(jedis.clientList());
     try {

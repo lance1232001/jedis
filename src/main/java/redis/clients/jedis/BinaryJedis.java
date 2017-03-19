@@ -16,6 +16,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocketFactory;
+
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.commands.*;
 import redis.clients.jedis.exceptions.InvalidURIException;
@@ -52,8 +56,32 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
     client = new Client(host, port);
   }
 
+  public BinaryJedis(final String host, final int port, final boolean ssl) {
+    client = new Client(host, port, ssl);
+  }
+
+  public BinaryJedis(final String host, final int port, final boolean ssl,
+      final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+      final HostnameVerifier hostnameVerifier) {
+    client = new Client(host, port, ssl, sslSocketFactory, sslParameters, hostnameVerifier);
+  }
+
   public BinaryJedis(final String host, final int port, final int timeout) {
     client = new Client(host, port);
+    client.setConnectionTimeout(timeout);
+    client.setSoTimeout(timeout);
+  }
+
+  public BinaryJedis(final String host, final int port, final int timeout, final boolean ssl) {
+    client = new Client(host, port, ssl);
+    client.setConnectionTimeout(timeout);
+    client.setSoTimeout(timeout);
+  }
+
+  public BinaryJedis(final String host, final int port, final int timeout, final boolean ssl,
+      final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+      final HostnameVerifier hostnameVerifier) {
+    client = new Client(host, port, ssl, sslSocketFactory, sslParameters, hostnameVerifier);
     client.setConnectionTimeout(timeout);
     client.setSoTimeout(timeout);
   }
@@ -65,8 +93,25 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
     client.setSoTimeout(soTimeout);
   }
 
+  public BinaryJedis(final String host, final int port, final int connectionTimeout,
+      final int soTimeout, final boolean ssl) {
+    client = new Client(host, port, ssl);
+    client.setConnectionTimeout(connectionTimeout);
+    client.setSoTimeout(soTimeout);
+  }
+
+  public BinaryJedis(final String host, final int port, final int connectionTimeout,
+      final int soTimeout, final boolean ssl, final SSLSocketFactory sslSocketFactory,
+      final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+    client = new Client(host, port, ssl, sslSocketFactory, sslParameters, hostnameVerifier);
+    client.setConnectionTimeout(connectionTimeout);
+    client.setSoTimeout(soTimeout);
+  }
+
   public BinaryJedis(final JedisShardInfo shardInfo) {
-    client = new Client(shardInfo.getHost(), shardInfo.getPort());
+    client = new Client(shardInfo.getHost(), shardInfo.getPort(), shardInfo.getSsl(),
+        shardInfo.getSslSocketFactory(), shardInfo.getSslParameters(),
+        shardInfo.getHostnameVerifier());
     client.setConnectionTimeout(shardInfo.getConnectionTimeout());
     client.setSoTimeout(shardInfo.getSoTimeout());
     client.setPassword(shardInfo.getPassword());
@@ -77,8 +122,20 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
     initializeClientFromURI(uri);
   }
 
+  public BinaryJedis(URI uri, final SSLSocketFactory sslSocketFactory,
+      final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+    initializeClientFromURI(uri, sslSocketFactory, sslParameters, hostnameVerifier);
+  }
+
   public BinaryJedis(final URI uri, final int timeout) {
     initializeClientFromURI(uri);
+    client.setConnectionTimeout(timeout);
+    client.setSoTimeout(timeout);
+  }
+
+  public BinaryJedis(final URI uri, final int timeout, final SSLSocketFactory sslSocketFactory,
+      final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+    initializeClientFromURI(uri, sslSocketFactory, sslParameters, hostnameVerifier);
     client.setConnectionTimeout(timeout);
     client.setSoTimeout(timeout);
   }
@@ -89,13 +146,45 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
     client.setSoTimeout(soTimeout);
   }
 
+  public BinaryJedis(final URI uri, final int connectionTimeout, final int soTimeout,
+      final SSLSocketFactory sslSocketFactory,final SSLParameters sslParameters,
+      final HostnameVerifier hostnameVerifier) {
+    initializeClientFromURI(uri, sslSocketFactory, sslParameters, hostnameVerifier);
+    client.setConnectionTimeout(connectionTimeout);
+    client.setSoTimeout(soTimeout);
+  }
+
   private void initializeClientFromURI(URI uri) {
     if (!JedisURIHelper.isValid(uri)) {
       throw new InvalidURIException(String.format(
         "Cannot open Redis connection due invalid URI. %s", uri.toString()));
     }
 
-    client = new Client(uri.getHost(), uri.getPort());
+    client = new Client(uri.getHost(), uri.getPort(), uri.getScheme().equals("rediss"));
+
+    String password = JedisURIHelper.getPassword(uri);
+    if (password != null) {
+      client.auth(password);
+      client.getStatusCodeReply();
+    }
+
+    int dbIndex = JedisURIHelper.getDBIndex(uri);
+    if (dbIndex > 0) {
+      client.select(dbIndex);
+      client.getStatusCodeReply();
+      client.setDb(dbIndex);
+    }
+  }
+
+  private void initializeClientFromURI(URI uri, final SSLSocketFactory sslSocketFactory,
+      final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+    if (!JedisURIHelper.isValid(uri)) {
+      throw new InvalidURIException(String.format(
+        "Cannot open Redis connection due invalid URI. %s", uri.toString()));
+    }
+
+    client = new Client(uri.getHost(), uri.getPort(), uri.getScheme().equals("rediss"),
+      sslSocketFactory, sslParameters, hostnameVerifier);
 
     String password = JedisURIHelper.getPassword(uri);
     if (password != null) {
@@ -2353,7 +2442,7 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
   private Set<Tuple> getBinaryTupledSet() {
     checkIsInMultiOrPipeline();
     List<byte[]> membersWithScores = client.getBinaryMultiBulkReply();
-    if (membersWithScores.size() == 0) {
+    if (membersWithScores.isEmpty()) {
       return Collections.emptySet();
     }
     Set<Tuple> set = new LinkedHashSet<Tuple>(membersWithScores.size() / 2, 1.0f);
@@ -3393,10 +3482,12 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
     return new ScanResult<byte[]>(newcursor, rawResults);
   }
 
+  @Override
   public ScanResult<Map.Entry<byte[], byte[]>> hscan(final byte[] key, final byte[] cursor) {
     return hscan(key, cursor, new ScanParams());
   }
 
+  @Override
   public ScanResult<Map.Entry<byte[], byte[]>> hscan(final byte[] key, final byte[] cursor,
       final ScanParams params) {
     checkIsInMultiOrPipeline();
@@ -3412,10 +3503,12 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
     return new ScanResult<Map.Entry<byte[], byte[]>>(newcursor, results);
   }
 
+  @Override
   public ScanResult<byte[]> sscan(final byte[] key, final byte[] cursor) {
     return sscan(key, cursor, new ScanParams());
   }
 
+  @Override
   public ScanResult<byte[]> sscan(final byte[] key, final byte[] cursor, final ScanParams params) {
     checkIsInMultiOrPipeline();
     client.sscan(key, cursor, params);
@@ -3425,10 +3518,12 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
     return new ScanResult<byte[]>(newcursor, rawResults);
   }
 
+  @Override
   public ScanResult<Tuple> zscan(final byte[] key, final byte[] cursor) {
     return zscan(key, cursor, new ScanParams());
   }
 
+  @Override
   public ScanResult<Tuple> zscan(final byte[] key, final byte[] cursor, final ScanParams params) {
     checkIsInMultiOrPipeline();
     client.zscan(key, cursor, params);
@@ -3528,7 +3623,7 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
    */
   protected static class SetFromList<E> extends AbstractSet<E> implements Serializable {
     private static final long serialVersionUID = -2850347066962734052L;
-    private final List<E> list;
+    private final transient List<E> list;
 
     private SetFromList(List<E> list) {
       if (list == null) {
@@ -3582,14 +3677,17 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
       return list.toArray(a);
     }
 
+    @Override
     public String toString() {
       return list.toString();
     }
 
+    @Override
     public int hashCode() {
       return list.hashCode();
     }
 
+    @Override
     public boolean equals(Object o) {
       if (o == this) {
         return true;
@@ -3625,5 +3723,19 @@ public class BinaryJedis implements BasicCommands, BinaryJedisCommands, MultiKey
     protected static <E> SetFromList<E> of(List<E> list) {
       return new SetFromList<E>(list);
     }
+  }
+
+  @Override
+  public List<Long> bitfield(byte[] key, byte[]... arguments) {
+    checkIsInMultiOrPipeline();
+    client.bitfield(key, arguments);
+    return client.getIntegerMultiBulkReply();
+  }
+
+  @Override
+  public Long hstrlen(byte[] key, byte[] field) {
+    checkIsInMultiOrPipeline();
+    client.hstrlen(key, field);
+    return client.getIntegerReply();
   }
 }

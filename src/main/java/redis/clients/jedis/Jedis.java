@@ -11,9 +11,20 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocketFactory;
+
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.JedisCluster.Reset;
-import redis.clients.jedis.commands.*;
+import redis.clients.jedis.commands.AdvancedJedisCommands;
+import redis.clients.jedis.commands.BasicCommands;
+import redis.clients.jedis.commands.ClusterCommands;
+import redis.clients.jedis.commands.JedisCommands;
+import redis.clients.jedis.commands.ModuleCommands;
+import redis.clients.jedis.commands.MultiKeyCommands;
+import redis.clients.jedis.commands.ScriptingCommands;
+import redis.clients.jedis.commands.SentinelCommands;
 import redis.clients.jedis.params.geo.GeoRadiusParam;
 import redis.clients.jedis.params.set.SetParams;
 import redis.clients.jedis.params.sortedset.ZAddParams;
@@ -22,7 +33,7 @@ import redis.clients.util.SafeEncoder;
 import redis.clients.util.Slowlog;
 
 public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommands,
-    AdvancedJedisCommands, ScriptingCommands, BasicCommands, ClusterCommands, SentinelCommands {
+    AdvancedJedisCommands, ScriptingCommands, BasicCommands, ClusterCommands, SentinelCommands, ModuleCommands {
 
   protected JedisPoolAbstract dataSource = null;
 
@@ -38,12 +49,44 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     super(host, port);
   }
 
+  public Jedis(final String host, final int port, final boolean ssl) {
+    super(host, port, ssl);
+  }
+
+  public Jedis(final String host, final int port, final boolean ssl,
+      final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+      final HostnameVerifier hostnameVerifier) {
+    super(host, port, ssl, sslSocketFactory, sslParameters, hostnameVerifier);
+  }
+
   public Jedis(final String host, final int port, final int timeout) {
     super(host, port, timeout);
   }
 
+  public Jedis(final String host, final int port, final int timeout, final boolean ssl) {
+    super(host, port, timeout, ssl);
+  }
+
+  public Jedis(final String host, final int port, final int timeout, final boolean ssl,
+      final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+      final HostnameVerifier hostnameVerifier) {
+    super(host, port, timeout, ssl, sslSocketFactory, sslParameters, hostnameVerifier);
+  }
+
   public Jedis(final String host, final int port, final int connectionTimeout, final int soTimeout) {
     super(host, port, connectionTimeout, soTimeout);
+  }
+
+  public Jedis(final String host, final int port, final int connectionTimeout, final int soTimeout,
+      final boolean ssl) {
+    super(host, port, connectionTimeout, soTimeout, ssl);
+  }
+
+  public Jedis(final String host, final int port, final int connectionTimeout, final int soTimeout,
+      final boolean ssl, final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+      final HostnameVerifier hostnameVerifier) {
+    super(host, port, connectionTimeout, soTimeout, ssl, sslSocketFactory, sslParameters,
+        hostnameVerifier);
   }
 
   public Jedis(JedisShardInfo shardInfo) {
@@ -54,12 +97,28 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     super(uri);
   }
 
+  public Jedis(URI uri, final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+      final HostnameVerifier hostnameVerifier) {
+    super(uri, sslSocketFactory, sslParameters, hostnameVerifier);
+  }
+
   public Jedis(final URI uri, final int timeout) {
     super(uri, timeout);
   }
 
+  public Jedis(final URI uri, final int timeout, final SSLSocketFactory sslSocketFactory,
+      final SSLParameters sslParameters, final HostnameVerifier hostnameVerifier) {
+    super(uri, timeout, sslSocketFactory, sslParameters, hostnameVerifier);
+  }
+
   public Jedis(final URI uri, final int connectionTimeout, final int soTimeout) {
     super(uri, connectionTimeout, soTimeout);
+  }
+
+  public Jedis(final URI uri, final int connectionTimeout, final int soTimeout,
+      final SSLSocketFactory sslSocketFactory, final SSLParameters sslParameters,
+      final HostnameVerifier hostnameVerifier) {
+    super(uri, connectionTimeout, soTimeout, sslSocketFactory, sslParameters, hostnameVerifier);
   }
 
   /**
@@ -171,34 +230,6 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     return client.getStatusCodeReply();
   }
 
-  /**
-   * Returns all the keys matching the glob-style pattern as space separated strings. For example if
-   * you have in the database the keys "foo" and "foobar" the command "KEYS foo*" will return
-   * "foo foobar".
-   * <p>
-   * Note that while the time complexity for this operation is O(n) the constant times are pretty
-   * low. For example Redis running on an entry level laptop can scan a 1 million keys database in
-   * 40 milliseconds. <b>Still it's better to consider this one of the slow commands that may ruin
-   * the DB performance if not used with care.</b>
-   * <p>
-   * In other words this command is intended only for debugging and special operations like creating
-   * a script to change the DB schema. Don't use it in your normal code. Use Redis Sets in order to
-   * group together a subset of objects.
-   * <p>
-   * Glob style patterns examples:
-   * <ul>
-   * <li>h?llo will match hello hallo hhllo
-   * <li>h*llo will match hllo heeeello
-   * <li>h[ae]llo will match hello and hallo, but not hillo
-   * </ul>
-   * <p>
-   * Use \ to escape special chars if you want to match them verbatim.
-   * <p>
-   * Time complexity: O(n) (with n being the number of keys in the DB, and assuming keys and pattern
-   * of limited length)
-   * @param pattern
-   * @return Multi bulk reply
-   */
   @Override
   public Set<String> keys(final String pattern) {
     checkIsInMultiOrPipeline();
@@ -1128,7 +1159,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.smembers(key);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -1174,7 +1205,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.spop(key, count);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -1256,7 +1287,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.sinter(keys);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -1296,7 +1327,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.sunion(keys);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -1434,7 +1465,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrange(key, start, end);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -1547,7 +1578,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrevrange(key, start, end);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -1970,8 +2001,8 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
    * @see #zrangeByScoreWithScores(String, double, double, int, int)
    * @see #zcount(String, double, double)
    * @param key
-   * @param min a double or Double.MIN_VALUE for "-inf"
-   * @param max a double or Double.MAX_VALUE for "+inf"
+   * @param min a double or Double.NEGATIVE_INFINITY for "-inf"
+   * @param max a double or Double.POSITIVE_INFINITY for "+inf"
    * @return Multi bulk reply specifically a list of elements in the specified score range.
    */
   @Override
@@ -1980,7 +2011,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrangeByScore(key, min, max);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -1991,7 +2022,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrangeByScore(key, min, max);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2050,7 +2081,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrangeByScore(key, min, max, offset, count);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2062,7 +2093,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrangeByScore(key, min, max, offset, count);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2195,9 +2226,9 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     checkIsInMultiOrPipeline();
     List<String> membersWithScores = client.getMultiBulkReply();
     if (membersWithScores == null) {
-      return null;
+      return Collections.emptySet();
     }
-    if (membersWithScores.size() == 0) {
+    if (membersWithScores.isEmpty()) {
       return Collections.emptySet();
     }
     Set<Tuple> set = new LinkedHashSet<Tuple>(membersWithScores.size() / 2, 1.0f);
@@ -2214,7 +2245,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrevrangeByScore(key, max, min);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2225,7 +2256,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrevrangeByScore(key, max, min);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2237,7 +2268,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrevrangeByScore(key, max, min, offset, count);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2272,7 +2303,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrevrangeByScore(key, max, min, offset, count);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2491,7 +2522,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrangeByLex(key, min, max);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2503,7 +2534,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrangeByLex(key, min, max, offset, count);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2514,7 +2545,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrevrangeByLex(key, max, min);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -2525,7 +2556,7 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.zrevrangeByLex(key, max, min, offset, count);
     final List<String> members = client.getMultiBulkReply();
     if (members == null) {
-      return null;
+      return Collections.emptySet();
     }
     return SetFromList.of(members);
   }
@@ -3511,4 +3542,37 @@ public class Jedis extends BinaryJedis implements JedisCommands, MultiKeyCommand
     client.georadiusByMember(key, member, radius, unit, param);
     return BuilderFactory.GEORADIUS_WITH_PARAMS_RESULT.build(client.getObjectMultiBulkReply());
   }
+
+  @Override
+  public String moduleLoad(String path) {
+    client.moduleLoad(path);
+    return client.getStatusCodeReply();
+  }
+
+  @Override
+  public String moduleUnload(String name) {
+    client.moduleUnload(name);
+    return client.getStatusCodeReply();
+  }
+
+  @Override
+  public List<Module> moduleList() {
+    client.moduleList();
+    return BuilderFactory.MODULE_LIST.build(client.getObjectMultiBulkReply());
+  }
+
+  @Override
+  public List<Long> bitfield(String key, String...arguments) {
+    checkIsInMultiOrPipeline();
+    client.bitfield(key, arguments);
+    return client.getIntegerMultiBulkReply();
+  }
+
+  @Override
+  public Long hstrlen(String key, String field) {
+    checkIsInMultiOrPipeline();
+    client.hstrlen(key, field);
+    return client.getIntegerReply();
+  }
+
 }

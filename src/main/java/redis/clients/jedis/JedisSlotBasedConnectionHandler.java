@@ -1,13 +1,12 @@
 package redis.clients.jedis;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 
-import redis.clients.jedis.exceptions.JedisConnectionException;
+import java.util.Set;
+
+import redis.clients.jedis.exceptions.JedisException;
+import redis.clients.jedis.exceptions.JedisNoReachableClusterNodeException;
 
 public class JedisSlotBasedConnectionHandler extends JedisClusterConnectionHandler {
 
@@ -18,7 +17,15 @@ public class JedisSlotBasedConnectionHandler extends JedisClusterConnectionHandl
 
   public JedisSlotBasedConnectionHandler(Set<HostAndPort> nodes,
       final GenericObjectPoolConfig poolConfig, int connectionTimeout, int soTimeout) {
-    super(nodes, poolConfig, connectionTimeout, soTimeout);
+    super(nodes, poolConfig, connectionTimeout, soTimeout, null);
+  }
+
+  public JedisSlotBasedConnectionHandler(Set<HostAndPort> nodes, GenericObjectPoolConfig poolConfig, int connectionTimeout, int soTimeout, String password) {
+    super(nodes, poolConfig, connectionTimeout, soTimeout, password);
+  }
+
+  public JedisSlotBasedConnectionHandler(Set<HostAndPort> nodes, GenericObjectPoolConfig poolConfig, int connectionTimeout, int soTimeout, String password, String clientName) {
+    super(nodes, poolConfig, connectionTimeout, soTimeout, password, clientName);
   }
 
   @Override
@@ -28,7 +35,7 @@ public class JedisSlotBasedConnectionHandler extends JedisClusterConnectionHandl
     // ping-pong)
     // or exception if all connections are invalid
 
-    List<JedisPool> pools = getShuffledNodesPool();
+    List<JedisPool> pools = cache.getShuffledNodesPool();
 
     for (JedisPool pool : pools) {
       Jedis jedis = null;
@@ -43,15 +50,15 @@ public class JedisSlotBasedConnectionHandler extends JedisClusterConnectionHandl
 
         if (result.equalsIgnoreCase("pong")) return jedis;
 
-        pool.returnBrokenResource(jedis);
-      } catch (JedisConnectionException ex) {
+        jedis.close();
+      } catch (JedisException ex) {
         if (jedis != null) {
-          pool.returnBrokenResource(jedis);
+          jedis.close();
         }
       }
     }
 
-    throw new JedisConnectionException("no reachable node in cluster");
+    throw new JedisNoReachableClusterNodeException("No reachable node in cluster");
   }
 
   @Override
@@ -62,7 +69,14 @@ public class JedisSlotBasedConnectionHandler extends JedisClusterConnectionHandl
       // assignment
       return connectionPool.getResource();
     } else {
-      return getConnection();
+      renewSlotCache(); //It's abnormal situation for cluster mode, that we have just nothing for slot, try to rediscover state
+      connectionPool = cache.getSlotPool(slot);
+      if (connectionPool != null) {
+        return connectionPool.getResource();
+      } else {
+        //no choice, fallback to new connection to random node
+        return getConnection();
+      }
     }
   }
 }

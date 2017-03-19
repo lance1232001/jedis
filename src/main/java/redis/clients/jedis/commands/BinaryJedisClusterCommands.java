@@ -49,6 +49,7 @@ public interface BinaryJedisClusterCommands {
   Long setnx(byte[] key, byte[] value);
 
   String setex(byte[] key, int seconds, byte[] value);
+  String psetex(byte[] key, long milliseconds, byte[] value);
 
   Long decrBy(byte[] key, long integer);
 
@@ -262,4 +263,33 @@ public interface BinaryJedisClusterCommands {
 
   List<GeoRadiusResponse> georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit,
       GeoRadiusParam param);
+
+  ScanResult<byte[]> scan(final byte[] cursor, final ScanParams params);
+  
+  ScanResult<Map.Entry<byte[], byte[]>> hscan(byte[] key, byte[] cursor);
+
+  ScanResult<Map.Entry<byte[], byte[]>> hscan(byte[] key, byte[] cursor, ScanParams params);
+
+  ScanResult<byte[]> sscan(byte[] key, byte[] cursor);
+
+  ScanResult<byte[]> sscan(byte[] key, byte[] cursor, ScanParams params);
+
+  ScanResult<Tuple> zscan(byte[] key, byte[] cursor);
+
+  ScanResult<Tuple> zscan(byte[] key, byte[] cursor, ScanParams params);
+
+  /**
+   * Executes BITFIELD Redis command
+   * @param key
+   * @param arguments
+   */
+  List<Long> bitfield(final byte[] key, final byte[]... arguments);
+  
+  /**
+   * Used for HSTRLEN Redis command
+   * @param key 
+   * @param field
+   */
+  Long hstrlen(final byte[] key, final byte[] field);
+
 }

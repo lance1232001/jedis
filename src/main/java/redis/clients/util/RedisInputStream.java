@@ -20,7 +20,7 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
  */
 public class RedisInputStream extends FilterInputStream {
 
-  protected final byte buf[];
+  protected final byte[] buf;
 
   protected int count, limit;
 
@@ -176,6 +176,7 @@ public class RedisInputStream extends FilterInputStream {
     return (isNeg ? -value : value);
   }
 
+  @Override
   public int read(byte[] b, int off, int len) throws JedisConnectionException {
     ensureFill();
 
